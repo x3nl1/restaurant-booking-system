@@ -32,7 +32,12 @@ class BookingService:
                 f"Столик вмещает максимум {table.capacity} гостей"
             )
 
-        if data.booking_date <= datetime.now(timezone.utc):
+        # Приводим к aware datetime для корректного сравнения
+        booking_dt = data.booking_date
+        if booking_dt.tzinfo is None:
+            booking_dt = booking_dt.replace(tzinfo=timezone.utc)
+
+        if booking_dt <= datetime.now(timezone.utc):
             raise BadRequestException("Дата бронирования должна быть в будущем")
 
         is_booked = await self._check_overlap(
