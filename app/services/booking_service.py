@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, select, func
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestException, ForbiddenException, NotFoundException
@@ -20,7 +20,6 @@ class BookingService:
 
     async def create(self, user_id: uuid.UUID, data: BookingCreate) -> BookingResponse:
         """Создание бронирования."""
-        # Проверяем существование столика
         table_result = await self.session.execute(
             select(Table).where(Table.id == data.table_id)
         )
@@ -28,17 +27,14 @@ class BookingService:
         if not table:
             raise NotFoundException("Столик не найден")
 
-        # Проверяем вместимость
         if data.guests_count > table.capacity:
             raise BadRequestException(
                 f"Столик вмещает максимум {table.capacity} гостей"
             )
 
-        # Проверяем, что дата в будущем
         if data.booking_date <= datetime.now(timezone.utc):
             raise BadRequestException("Дата бронирования должна быть в будущем")
 
-        # Проверяем доступность
         is_booked = await self._check_overlap(
             data.table_id, data.booking_date, data.duration_minutes
         )
@@ -110,22 +106,21 @@ class BookingService:
         end_time = date + timedelta(minutes=duration)
 
         result = await self.session.execute(
-            select(func.count(Booking.id)).where(
+            select(Booking).where(
                 and_(
                     Booking.table_id == table_id,
                     Booking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
                     Booking.booking_date < end_time,
-                    # Конец существующего бронирования > начало нового
-                    (
-                        Booking.booking_date
-                        + func.make_interval(0, 0, 0, 0, 0, Booking.duration_minutes, 0)
-                    )
-                    > date,
                 )
             )
         )
-        count = result.scalar() or 0
-        return count > 0
+        bookings = result.scalars().all()
+
+        for booking in bookings:
+            booking_end = booking.booking_date + timedelta(minutes=booking.duration_minutes)
+            if booking_end > date:
+                return True
+        return False
 
     async def _get_or_404(self, booking_id: uuid.UUID) -> Booking:
         result = await self.session.execute(
