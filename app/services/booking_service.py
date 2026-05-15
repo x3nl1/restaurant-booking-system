@@ -1,7 +1,7 @@
 """Сервис бронирования."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,9 +35,9 @@ class BookingService:
         # Приводим к aware datetime для корректного сравнения
         booking_dt = data.booking_date
         if booking_dt.tzinfo is None:
-            booking_dt = booking_dt.replace(tzinfo=timezone.utc)
+            booking_dt = booking_dt.replace(tzinfo=UTC)
 
-        if booking_dt <= datetime.now(timezone.utc):
+        if booking_dt <= datetime.now(UTC):
             raise BadRequestException("Дата бронирования должна быть в будущем")
 
         is_booked = await self._check_overlap(

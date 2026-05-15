@@ -1,7 +1,7 @@
 """Модель ресторана."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, Float, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
@@ -30,7 +30,7 @@ class Restaurant(Base):
     floor_plan_width: Mapped[int] = mapped_column(Integer, default=800)
     floor_plan_height: Mapped[int] = mapped_column(Integer, default=600)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
     tables = relationship("Table", back_populates="restaurant", lazy="selectin")

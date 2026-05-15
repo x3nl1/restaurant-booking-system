@@ -1,8 +1,8 @@
 """SQLAlchemy модели."""
 
-from app.models.user import User
+from app.models.booking import Booking
 from app.models.restaurant import Restaurant
 from app.models.table import Table
-from app.models.booking import Booking
+from app.models.user import User
 
-__all__ = ["User", "Restaurant", "Table", "Booking"]
+__all__ = ["Booking", "Restaurant", "Table", "User"]

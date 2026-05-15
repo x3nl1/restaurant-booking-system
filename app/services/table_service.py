@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy import and_, select, func
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException
@@ -119,7 +119,6 @@ class TableService:
         """Проверка, забронирован ли столик на указанное время."""
         end_time = date + timedelta(minutes=duration)
 
-        # Получаем все активные бронирования для столика
         result = await self.session.execute(
             select(Booking).where(
                 and_(
@@ -131,7 +130,6 @@ class TableService:
         )
         bookings = result.scalars().all()
 
-        # Проверяем пересечение вручную (совместимо с SQLite для тестов)
         for booking in bookings:
             booking_end = booking.booking_date + timedelta(minutes=booking.duration_minutes)
             if booking_end > date:
