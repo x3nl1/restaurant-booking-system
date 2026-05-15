@@ -105,6 +105,32 @@ safety check -r requirements.txt
 
 Коммиты: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## Архитектура
+
+Подробная документация с диаграммами: [docs/architecture.md](docs/architecture.md)
+
+Включает:
+- C4 Context & Container диаграммы
+- Компонентная диаграмма
+- ER-диаграмма базы данных
+- Sequence-диаграммы ключевых сценариев
+
+## Заполнение тестовыми данными
+
+```bash
+python -m scripts.seed
+```
+
+## Миграции БД
+
+```bash
+# Применить миграции
+alembic upgrade head
+
+# Откатить
+alembic downgrade -1
+```
+
 ## Лицензия
 
 MIT
