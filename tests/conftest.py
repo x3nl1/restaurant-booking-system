@@ -2,7 +2,7 @@
 
 import uuid
 from collections.abc import AsyncGenerator
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -19,24 +19,30 @@ from app.models.user import User
 # SQLite для тестов (in-memory)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
-engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-TestSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+@pytest.fixture(scope="session")
+def anyio_backend():
+    return "asyncio"
 
 
 @pytest.fixture(autouse=True)
 async def setup_db():
     """Создание и удаление таблиц для каждого теста."""
+    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    yield
+    yield engine
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
 
 
 @pytest.fixture
-async def session() -> AsyncGenerator[AsyncSession, None]:
+async def session(setup_db) -> AsyncGenerator[AsyncSession, None]:
     """Тестовая сессия БД."""
-    async with TestSessionLocal() as session:
+    engine = setup_db
+    session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with session_maker() as session:
         yield session
 
 
@@ -154,7 +160,7 @@ async def test_booking(
         id=uuid.uuid4(),
         user_id=test_user.id,
         table_id=test_table.id,
-        booking_date=datetime.now(timezone.utc) + timedelta(days=1),
+        booking_date=datetime.now(UTC) + timedelta(days=1),
         duration_minutes=120,
         guests_count=2,
         status=BookingStatus.PENDING,
