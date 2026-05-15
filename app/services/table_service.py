@@ -1,12 +1,12 @@
 """Сервис столиков."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BadRequestException, NotFoundException
+from app.core.exceptions import NotFoundException
 from app.models.booking import Booking, BookingStatus
 from app.models.restaurant import Restaurant
 from app.models.table import Table
@@ -26,7 +26,6 @@ class TableService:
 
     async def create(self, data: TableCreate) -> TableResponse:
         """Создание столика."""
-        # Проверяем существование ресторана
         rest_result = await self.session.execute(
             select(Restaurant).where(Restaurant.id == data.restaurant_id)
         )
@@ -47,7 +46,6 @@ class TableService:
         duration: int = 120,
     ) -> list[TableResponse]:
         """Получение доступных столиков на указанную дату."""
-        # Все столики ресторана с достаточной вместимостью
         tables_result = await self.session.execute(
             select(Table).where(
                 and_(
@@ -58,13 +56,12 @@ class TableService:
         )
         tables = tables_result.scalars().all()
 
-        # Проверяем занятость каждого столика
         available = []
         for table in tables:
             is_booked = await self._is_table_booked(table.id, date, duration)
-            response = TableResponse.model_validate(table)
-            response.is_available = not is_booked
             if not is_booked:
+                response = TableResponse.model_validate(table)
+                response.is_available = True
                 available.append(response)
 
         return available
@@ -120,21 +117,26 @@ class TableService:
         self, table_id: uuid.UUID, date: datetime, duration: int
     ) -> bool:
         """Проверка, забронирован ли столик на указанное время."""
-        from datetime import timedelta
-
         end_time = date + timedelta(minutes=duration)
 
+        # Получаем все активные бронирования для столика
         result = await self.session.execute(
             select(Booking).where(
                 and_(
                     Booking.table_id == table_id,
                     Booking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
                     Booking.booking_date < end_time,
-                    (Booking.booking_date + func_interval(Booking.duration_minutes)) > date,
                 )
             )
         )
-        return result.scalar_one_or_none() is not None
+        bookings = result.scalars().all()
+
+        # Проверяем пересечение вручную (совместимо с SQLite для тестов)
+        for booking in bookings:
+            booking_end = booking.booking_date + timedelta(minutes=booking.duration_minutes)
+            if booking_end > date:
+                return True
+        return False
 
     async def _get_or_404(self, table_id: uuid.UUID) -> Table:
         result = await self.session.execute(select(Table).where(Table.id == table_id))
@@ -142,11 +144,3 @@ class TableService:
         if not table:
             raise NotFoundException("Столик не найден")
         return table
-
-
-def func_interval(minutes_column):
-    """Вспомогательная функция для интервала в SQL."""
-    from sqlalchemy import text
-    from sqlalchemy.sql import expression
-
-    return expression.literal_column(f"interval '1 minute' * {minutes_column.key}")

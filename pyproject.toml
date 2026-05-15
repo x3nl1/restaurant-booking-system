@@ -7,7 +7,12 @@ requires-python = ">=3.12"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-v --tb=short"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-v --tb=short -W ignore::DeprecationWarning"
+filterwarnings = [
+    "ignore::DeprecationWarning:jose.*",
+    "ignore::pytest.PytestDeprecationWarning",
+]
 
 [tool.ruff]
 target-version = "py312"
