@@ -31,15 +31,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libpq-dev
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-asyncio pytest-cov aiosqlite httpx
-      - name: Run tests
-        run: pytest --cov=app --cov-report=xml tests/
-      - name: Check coverage >= 90%
-        run: pytest --cov=app --cov-fail-under=90 tests/ -q
+      - name: Run tests with coverage
+        run: pytest --cov=app --cov-report=xml --cov-fail-under=90 tests/ -q
 
   docker:
     runs-on: ubuntu-latest
