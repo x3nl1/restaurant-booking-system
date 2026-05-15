@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install ruff bandit safety
+      - name: Ruff lint
+        run: ruff check app/
+      - name: Bandit SAST
+        run: bandit -r app/ -c pyproject.toml
+      - name: Safety check
+        run: safety check -r requirements.txt
+        continue-on-error: true
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov aiosqlite httpx
+      - name: Run tests
+        run: pytest --cov=app --cov-report=xml tests/
+      - name: Check coverage >= 90%
+        run: pytest --cov=app --cov-fail-under=90 tests/ -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t restaurant-booking .

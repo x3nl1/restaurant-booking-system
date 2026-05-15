@@ -1,0 +1,34 @@
+[project]
+name = "restaurant-booking"
+version = "1.0.0"
+description = "Система бронирования столиков в ресторанах"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-v --tb=short -W ignore::DeprecationWarning"
+filterwarnings = [
+    "ignore::DeprecationWarning:jose.*",
+    "ignore::pytest.PytestDeprecationWarning",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["tests/*", "alembic/*"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 90
