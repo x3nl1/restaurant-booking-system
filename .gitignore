@@ -7,21 +7,25 @@ __pycache__/
 dist/
 build/
 .eggs/
+*.whl
 
 # Virtual environment
 venv/
 .venv/
 env/
+.python-version
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+*.sublime-*
 
 # Environment
 .env
 .env.local
+.env.production
 
 # Database
 *.db
@@ -32,12 +36,25 @@ postgres_data/
 
 # Testing
 .coverage
+.coverage.*
 htmlcov/
 .pytest_cache/
+coverage.xml
 
-# Ruff
+# Linting
 .ruff_cache/
+.mypy_cache/
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# Logs
+*.log
+
+# Temp files
+*.tmp
+*.bak
+*.swp
