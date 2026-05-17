@@ -7,12 +7,12 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=settings.DEBUG,
-    pool_size=20,
-    max_overflow=10,
-)
+# Параметры пула только для PostgreSQL (SQLite не поддерживает)
+engine_kwargs: dict = {"echo": settings.DEBUG}
+if "sqlite" not in settings.DATABASE_URL:
+    engine_kwargs.update(pool_size=20, max_overflow=10)
+
+engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
 
 async_session_maker = async_sessionmaker(
     engine,

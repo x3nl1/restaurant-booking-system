@@ -2,13 +2,14 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_admin_user, get_current_user
 from app.core.database import get_session
 from app.models.user import User
 from app.schemas.booking import BookingCreate, BookingListResponse, BookingResponse
+from app.services.auth_service import AuthService
 from app.services.booking_service import BookingService
 from app.services.notification_service import NotificationService
 
@@ -28,12 +29,14 @@ async def create_booking(
 
 @router.get("/my", response_model=BookingListResponse)
 async def get_my_bookings(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> BookingListResponse:
     """Получение бронирований текущего пользователя."""
     service = BookingService(session)
-    return await service.get_user_bookings(current_user.id)
+    return await service.get_user_bookings(current_user.id, limit=limit, offset=offset)
 
 
 @router.patch("/{booking_id}/cancel", response_model=BookingResponse)
@@ -46,7 +49,6 @@ async def cancel_booking(
     service = BookingService(session)
     result = await service.cancel(booking_id, current_user.id)
 
-    # Отправка уведомления об отмене
     await NotificationService.send_booking_cancellation(
         to_email=current_user.email,
         guest_name=current_user.full_name,
@@ -65,9 +67,6 @@ async def confirm_booking(
     """Подтверждение бронирования (только админ)."""
     service = BookingService(session)
     result = await service.confirm(booking_id)
-
-    # Отправка уведомления о подтверждении
-    from app.services.auth_service import AuthService
 
     auth_service = AuthService(session)
     user = await auth_service.get_user_by_id(result.user_id)

@@ -26,4 +26,4 @@ class User(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
-    bookings = relationship("Booking", back_populates="user", lazy="selectin")
+    bookings = relationship("Booking", back_populates="user", lazy="noload")

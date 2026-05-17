@@ -1,0 +1,17 @@
+.git
+.github
+.pytest_cache
+.ruff_cache
+.coverage
+__pycache__
+tests/
+docs/
+scripts/
+*.pyc
+*.pyo
+.env
+.env.local
+htmlcov/
+*.md
+.bandit
+.pre-commit-config.yaml

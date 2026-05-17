@@ -56,10 +56,16 @@ class TableService:
         )
         tables = tables_result.scalars().all()
 
+        if not tables:
+            return []
+
+        # Получаем все активные бронирования для этих столиков одним запросом
+        table_ids = [t.id for t in tables]
+        booked_ids = await self._get_booked_table_ids(table_ids, date, duration)
+
         available = []
         for table in tables:
-            is_booked = await self._is_table_booked(table.id, date, duration)
-            if not is_booked:
+            if table.id not in booked_ids:
                 response = TableResponse.model_validate(table)
                 response.is_available = True
                 available.append(response)
@@ -82,12 +88,17 @@ class TableService:
         )
         tables = tables_result.scalars().all()
 
+        # Если указана дата — проверяем доступность одним запросом
+        booked_ids: set[uuid.UUID] = set()
+        if date and tables:
+            table_ids = [t.id for t in tables]
+            booked_ids = await self._get_booked_table_ids(table_ids, date, 120)
+
         table_responses = []
         for table in tables:
             response = TableResponse.model_validate(table)
             if date:
-                is_booked = await self._is_table_booked(table.id, date, 120)
-                response.is_available = not is_booked
+                response.is_available = table.id not in booked_ids
             table_responses.append(response)
 
         return FloorPlanResponse(
@@ -113,16 +124,16 @@ class TableService:
         table = await self._get_or_404(table_id)
         await self.session.delete(table)
 
-    async def _is_table_booked(
-        self, table_id: uuid.UUID, date: datetime, duration: int
-    ) -> bool:
-        """Проверка, забронирован ли столик на указанное время."""
+    async def _get_booked_table_ids(
+        self, table_ids: list[uuid.UUID], date: datetime, duration: int
+    ) -> set[uuid.UUID]:
+        """Получение ID занятых столиков одним запросом (решение N+1)."""
         end_time = date + timedelta(minutes=duration)
 
         result = await self.session.execute(
             select(Booking).where(
                 and_(
-                    Booking.table_id == table_id,
+                    Booking.table_id.in_(table_ids),
                     Booking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
                     Booking.booking_date < end_time,
                 )
@@ -130,11 +141,12 @@ class TableService:
         )
         bookings = result.scalars().all()
 
+        booked: set[uuid.UUID] = set()
         for booking in bookings:
             booking_end = booking.booking_date + timedelta(minutes=booking.duration_minutes)
             if booking_end > date:
-                return True
-        return False
+                booked.add(booking.table_id)
+        return booked
 
     async def _get_or_404(self, table_id: uuid.UUID) -> Table:
         result = await self.session.execute(select(Table).where(Table.id == table_id))

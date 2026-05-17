@@ -7,7 +7,7 @@ from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
-from app.core.exceptions import UnauthorizedException
+from app.core.exceptions import ForbiddenException, UnauthorizedException
 from app.core.security import decode_access_token
 from app.models.user import User
 from app.services.auth_service import AuthService
@@ -51,6 +51,5 @@ async def get_admin_user(
 ) -> User:
     """Проверка, что пользователь — администратор."""
     if not current_user.is_admin:
-        from app.core.exceptions import ForbiddenException
         raise ForbiddenException("Требуются права администратора")
     return current_user
