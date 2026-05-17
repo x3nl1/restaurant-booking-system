@@ -21,7 +21,7 @@ jobs:
       - name: Bandit SAST
         run: bandit -r app/ -c pyproject.toml
       - name: Safety check
-        run: safety check -r requirements.txt
+        run: safety check -r requirements.txt --bare
         continue-on-error: true
 
   test:
