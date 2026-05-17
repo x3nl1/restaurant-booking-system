@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 
 from app.core.config import settings
@@ -34,5 +34,5 @@ def decode_access_token(token: str) -> dict | None:
     """Декодирование JWT-токена."""
     try:
         return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-    except JWTError:
+    except (jwt.InvalidTokenError, jwt.DecodeError, jwt.ExpiredSignatureError):
         return None
