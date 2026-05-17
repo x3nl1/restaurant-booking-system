@@ -1,46 +1,40 @@
 # Архитектура системы бронирования столиков
 
-## C4 — Контекстная диаграмма
+## Контекстная диаграмма
 
 ```mermaid
-C4Context
-    title Система бронирования столиков — Контекст
+graph TD
+    User["Пользователь"]
+    Admin["Администратор"]
+    System["Система бронирования столиков<br/>REST API"]
+    Email["SMTP-сервер"]
+    Maps["Картографический сервис"]
 
-    Person(user, "Пользователь", "Бронирует столики через мобильное приложение")
-    Person(admin, "Администратор", "Управляет ресторанами, столиками, подтверждает брони")
-
-    System(booking_system, "Restaurant Booking API", "REST API для бронирования столиков")
-
-    System_Ext(email, "SMTP-сервер", "Отправка email-уведомлений")
-    System_Ext(maps, "Картографический сервис", "Навигация к ресторану")
-
-    Rel(user, booking_system, "Бронирует столики", "HTTPS/JSON")
-    Rel(admin, booking_system, "Управляет данными", "HTTPS/JSON")
-    Rel(booking_system, email, "Отправляет уведомления", "SMTP")
-    Rel(user, maps, "Строит маршрут", "HTTPS")
+    User -->|"Бронирование<br/>HTTPS/JSON"| System
+    Admin -->|"Управление<br/>HTTPS/JSON"| System
+    System -->|"Уведомления<br/>SMTP"| Email
+    User -->|"Навигация<br/>HTTPS"| Maps
 ```
 
-## C4 — Контейнерная диаграмма
+## Контейнерная диаграмма
 
 ```mermaid
-C4Container
-    title Restaurant Booking System — Контейнеры
+graph TD
+    User["Пользователь"]
+    Admin["Администратор"]
 
-    Person(user, "Пользователь")
-    Person(admin, "Администратор")
+    subgraph boundary["Система бронирования столиков"]
+        API["FastAPI Application<br/>Python 3.12"]
+        DB[("PostgreSQL 16")]
+        Redis["Redis 7"]
+        Mail["Почтовый сервер<br/>SMTP"]
+    end
 
-    Container_Boundary(system, "Restaurant Booking System") {
-        Container(api, "FastAPI Application", "Python 3.12, FastAPI", "REST API, бизнес-логика")
-        ContainerDb(db, "PostgreSQL 16", "SQL", "Хранение данных")
-        Container(redis, "Redis 7", "Key-Value", "Кэширование")
-        Container(mailhog, "MailHog", "SMTP", "Отправка email (dev)")
-    }
-
-    Rel(user, api, "HTTPS/JSON")
-    Rel(admin, api, "HTTPS/JSON")
-    Rel(api, db, "asyncpg", "TCP:5432")
-    Rel(api, redis, "redis-py", "TCP:6379")
-    Rel(api, mailhog, "aiosmtplib", "TCP:1025")
+    User -->|"HTTPS/JSON"| API
+    Admin -->|"HTTPS/JSON"| API
+    API -->|"asyncpg<br/>TCP:5432"| DB
+    API -->|"redis-py<br/>TCP:6379"| Redis
+    API -->|"aiosmtplib<br/>TCP:1025"| Mail
 ```
 
 ## Компонентная диаграмма
@@ -67,6 +61,10 @@ graph TB
         MODELS[SQLAlchemy Models]
     end
 
+    subgraph "External"
+        SMTP[SMTP-сервер]
+    end
+
     AUTH --> AS
     REST --> RS
     TABLES --> TS
@@ -77,6 +75,7 @@ graph TB
     RS --> MODELS
     TS --> MODELS
     BS --> MODELS
+    NS --> SMTP
     MODELS --> DB
 ```
 
@@ -153,8 +152,6 @@ sequenceDiagram
     participant Auth as AuthService
     participant BS as BookingService
     participant DB as PostgreSQL
-    participant NS as NotificationService
-    participant SMTP as SMTP-сервер
 
     U->>API: POST /api/v1/bookings (JWT + body)
     API->>Auth: Проверка JWT-токена
@@ -170,11 +167,6 @@ sequenceDiagram
     DB-->>BS: Booking (status=pending)
     BS-->>API: BookingResponse
     API-->>U: 201 Created
-    
-    Note over API,SMTP: При подтверждении админом
-    API->>NS: send_booking_confirmation()
-    NS->>SMTP: Email
-    SMTP-->>NS: OK
 ```
 
 ## Sequence-диаграмма: Получение карты зала
