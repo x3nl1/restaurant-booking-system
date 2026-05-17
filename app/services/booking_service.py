@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import BadRequestException, ForbiddenException, NotFoundException
 from app.models.booking import Booking, BookingStatus
@@ -32,7 +33,7 @@ class BookingService:
                 f"Столик вмещает максимум {table.capacity} гостей"
             )
 
-        # Приводим к aware datetime для корректного сравнения
+        # Нормализуем datetime к aware UTC
         booking_dt = data.booking_date
         if booking_dt.tzinfo is None:
             booking_dt = booking_dt.replace(tzinfo=UTC)
@@ -40,8 +41,9 @@ class BookingService:
         if booking_dt <= datetime.now(UTC):
             raise BadRequestException("Дата бронирования должна быть в будущем")
 
+        # Используем нормализованный booking_dt для проверки пересечений
         is_booked = await self._check_overlap(
-            data.table_id, data.booking_date, data.duration_minutes
+            data.table_id, booking_dt, data.duration_minutes
         )
         if is_booked:
             raise BadRequestException("Столик уже забронирован на это время")
@@ -49,7 +51,7 @@ class BookingService:
         booking = Booking(
             user_id=user_id,
             table_id=data.table_id,
-            booking_date=data.booking_date,
+            booking_date=booking_dt,
             duration_minutes=data.duration_minutes,
             guests_count=data.guests_count,
             comment=data.comment,
@@ -60,23 +62,37 @@ class BookingService:
         await self.session.flush()
         await self.session.refresh(booking)
 
-        return await self._to_response(booking)
+        return self._to_response(booking, table)
 
-    async def get_user_bookings(self, user_id: uuid.UUID) -> BookingListResponse:
-        """Получение бронирований пользователя."""
+    async def get_user_bookings(
+        self, user_id: uuid.UUID, limit: int = 50, offset: int = 0
+    ) -> BookingListResponse:
+        """Получение бронирований пользователя с пагинацией."""
+        from sqlalchemy import func
+
+        # Общее количество бронирований пользователя
+        count_result = await self.session.execute(
+            select(func.count(Booking.id)).where(Booking.user_id == user_id)
+        )
+        total = count_result.scalar() or 0
+
+        # Загружаем бронирования с join на table и restaurant (избегаем N+1)
         result = await self.session.execute(
             select(Booking)
+            .options(selectinload(Booking.table).selectinload(Table.restaurant))
             .where(Booking.user_id == user_id)
             .order_by(Booking.booking_date.desc())
+            .limit(limit)
+            .offset(offset)
         )
         bookings = result.scalars().all()
 
-        items = [await self._to_response(b) for b in bookings]
-        return BookingListResponse(items=items, total=len(items))
+        items = [self._to_response(b, b.table) for b in bookings]
+        return BookingListResponse(items=items, total=total)
 
     async def cancel(self, booking_id: uuid.UUID, user_id: uuid.UUID) -> BookingResponse:
         """Отмена бронирования пользователем."""
-        booking = await self._get_or_404(booking_id)
+        booking = await self._get_with_table(booking_id)
 
         if booking.user_id != user_id:
             raise ForbiddenException("Вы не можете отменить чужое бронирование")
@@ -90,11 +106,11 @@ class BookingService:
         booking.status = BookingStatus.CANCELLED
         await self.session.flush()
         await self.session.refresh(booking)
-        return await self._to_response(booking)
+        return self._to_response(booking, booking.table)
 
     async def confirm(self, booking_id: uuid.UUID) -> BookingResponse:
         """Подтверждение бронирования администратором."""
-        booking = await self._get_or_404(booking_id)
+        booking = await self._get_with_table(booking_id)
 
         if booking.status != BookingStatus.PENDING:
             raise BadRequestException("Можно подтвердить только ожидающее бронирование")
@@ -102,7 +118,7 @@ class BookingService:
         booking.status = BookingStatus.CONFIRMED
         await self.session.flush()
         await self.session.refresh(booking)
-        return await self._to_response(booking)
+        return self._to_response(booking, booking.table)
 
     async def _check_overlap(
         self, table_id: uuid.UUID, date: datetime, duration: int
@@ -122,27 +138,29 @@ class BookingService:
         bookings = result.scalars().all()
 
         for booking in bookings:
-            booking_end = booking.booking_date + timedelta(minutes=booking.duration_minutes)
+            # Нормализуем к aware для корректного сравнения
+            b_date = booking.booking_date
+            if b_date.tzinfo is None:
+                b_date = b_date.replace(tzinfo=UTC)
+            booking_end = b_date + timedelta(minutes=booking.duration_minutes)
             if booking_end > date:
                 return True
         return False
 
-    async def _get_or_404(self, booking_id: uuid.UUID) -> Booking:
+    async def _get_with_table(self, booking_id: uuid.UUID) -> Booking:
+        """Получение бронирования с подгрузкой столика и ресторана."""
         result = await self.session.execute(
-            select(Booking).where(Booking.id == booking_id)
+            select(Booking)
+            .options(selectinload(Booking.table).selectinload(Table.restaurant))
+            .where(Booking.id == booking_id)
         )
         booking = result.scalar_one_or_none()
         if not booking:
             raise NotFoundException("Бронирование не найдено")
         return booking
 
-    async def _to_response(self, booking: Booking) -> BookingResponse:
-        """Конвертация модели в ответ с дополнительными данными."""
-        table_result = await self.session.execute(
-            select(Table).where(Table.id == booking.table_id)
-        )
-        table = table_result.scalar_one_or_none()
-
+    def _to_response(self, booking: Booking, table: Table | None) -> BookingResponse:
+        """Конвертация модели в ответ (синхронная, без доп. запросов)."""
         restaurant_name = None
         table_number = None
         if table:

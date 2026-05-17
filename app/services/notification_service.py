@@ -60,8 +60,8 @@ class NotificationService:
                 username=settings.SMTP_USER or None,
                 password=settings.SMTP_PASSWORD or None,
             )
-            logger.info(f"Email sent to {to_email}: {subject}")
+            logger.info("Email sent to %s: %s", to_email, subject)
             return True
-        except Exception as e:
-            logger.error(f"Failed to send email to {to_email}: {e}")
+        except Exception:
+            logger.error("Failed to send email to %s", to_email, exc_info=True)
             return False

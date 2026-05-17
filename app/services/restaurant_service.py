@@ -29,8 +29,13 @@ class RestaurantService:
         count_query = select(func.count(Restaurant.id))
 
         if cuisine:
-            query = query.where(Restaurant.cuisine_type.ilike(f"%{cuisine}%"))
-            count_query = count_query.where(Restaurant.cuisine_type.ilike(f"%{cuisine}%"))
+            escaped = cuisine.replace("%", "\\%").replace("_", "\\_")
+            query = query.where(
+                Restaurant.cuisine_type.ilike(f"%{escaped}%", escape="\\")
+            )
+            count_query = count_query.where(
+                Restaurant.cuisine_type.ilike(f"%{escaped}%", escape="\\")
+            )
 
         total_result = await self.session.execute(count_query)
         total = total_result.scalar() or 0

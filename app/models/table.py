@@ -26,4 +26,4 @@ class Table(Base):
     zone: Mapped[str] = mapped_column(String(50), default="main")
 
     restaurant = relationship("Restaurant", back_populates="tables")
-    bookings = relationship("Booking", back_populates="table", lazy="selectin")
+    bookings = relationship("Booking", back_populates="table", lazy="noload")
